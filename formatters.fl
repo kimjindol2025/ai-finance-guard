@@ -1,0 +1,97 @@
+// CLI 출력 포맷터
+import { string } from "./stdlib/string"
+import { array } from "./stdlib/array"
+
+// 간단한 ASCII 표 출력
+fn print_table(headers, rows) {
+  if (array.length(rows) == 0) {
+    println("(데이터 없음)")
+    return
+  }
+
+  // 헤더 출력
+  let header_str = ""
+  for h in headers {
+    header_str = header_str + string.pad_right(h, 15) + " | "
+  }
+  println(header_str)
+  println(string.repeat("-", string.length(header_str)))
+
+  // 행 출력
+  for row in rows {
+    let row_str = ""
+    for i = 0; i < array.length(headers); i = i + 1 {
+      let val = row[headers[i]]
+      row_str = row_str + string.pad_right(string.to_string(val), 15) + " | "
+    }
+    println(row_str)
+  }
+}
+
+// 월별 리포트 출력
+fn print_monthly_report(month_str, expenses, total) {
+  println("\n" + "=".repeat(60))
+  println("📊 " + month_str + " 지출 리포트")
+  println("=".repeat(60))
+
+  // 카테고리별 합계
+  let categories = {}
+  for exp in expenses {
+    let cat = exp.category
+    if (categories[cat] == null) {
+      categories[cat] = 0
+    }
+    categories[cat] = categories[cat] + exp.amount
+  }
+
+  // 카테고리별 출력
+  for cat in categories.keys() {
+    let cat_total = categories[cat]
+    let pct = (cat_total / total) * 100
+    println("  " + string.pad_right(cat, 15) + ": " + cat_total + "원 (" + round(pct) + "%)")
+  }
+
+  println("\n총 지출: " + total + "원")
+  println("=".repeat(60) + "\n")
+}
+
+// 예산 예측 출력
+fn print_prediction(prediction) {
+  println("\n💡 다음 달 예산 예측")
+  println("-".repeat(40))
+  println("예상 지출: " + round(prediction.predicted_total) + "원")
+  println("신뢰 구간: " + round(prediction.confidence_interval.lower) + " ~ " + round(prediction.confidence_interval.upper) + "원")
+  println("방법: " + prediction.method)
+  println("-".repeat(40) + "\n")
+}
+
+// 구독 목록 출력
+fn print_subscriptions(subscriptions) {
+  println("\n" + "=".repeat(60))
+  println("🎫 구독 서비스 목록")
+  println("=".repeat(60))
+
+  let total_monthly = 0
+
+  for sub in subscriptions {
+    println("\n📌 " + sub.name)
+    println("   요금: " + sub.amount + "원 (" + sub.cycle + ")")
+    println("   월 환산: " + round(sub.monthly_cost) + "원")
+    println("   다음 갱신: " + sub.next_renewal_date)
+
+    total_monthly = total_monthly + sub.monthly_cost
+  }
+
+  println("\n총 월 구독료: " + round(total_monthly) + "원")
+  println("=".repeat(60) + "\n")
+}
+
+// 저축 예측 출력
+fn print_savings_forecast(forecast, months) {
+  println("\n💰 저축 예측 (" + months + "개월)")
+  println("-".repeat(40))
+  println("월 저축액: " + round(forecast.monthly_savings) + "원")
+  println("단리 합계: " + round(forecast.total_simple_interest) + "원")
+  println("복리 합계: " + round(forecast.total_compound_interest) + "원 (연 3%)")
+  println("-".repeat(40) + "\n")
+}

@@ -1,0 +1,122 @@
+// 예산 예측 (가중 이동평균)
+import { array } from "./stdlib/array"
+import { json } from "./stdlib/json"
+
+// 표준편차 계산
+fn calc_std(values) {
+  if (array.length(values) == 0) { return 0 }
+
+  let avg = array.sum(values) / array.length(values)
+  let sum_sq_diff = 0
+
+  for val in values {
+    let diff = val - avg
+    sum_sq_diff = sum_sq_diff + (diff * diff)
+  }
+
+  let variance = sum_sq_diff / array.length(values)
+  return sqrt(variance)
+}
+
+// 가중 이동평균 계산
+fn weighted_moving_average(monthly_totals) {
+  let n = array.length(monthly_totals)
+
+  if (n == 0) { return 0 }
+  if (n == 1) { return monthly_totals[0] }
+
+  let weights = null
+  if (n >= 3) {
+    weights = [0.20, 0.30, 0.50]  // 최근 3개월
+  }
+  else if (n == 2) {
+    weights = [0.40, 0.60]
+  }
+  else {
+    weights = [1.0]
+  }
+
+  let start = n - array.length(weights)
+  if (start < 0) { start = 0 }
+
+  let recent = array.slice(monthly_totals, start, n)
+
+  let sum = 0
+  let i = 0
+  while i < array.length(recent) {
+    sum = sum + (recent[i] * weights[i])
+    i = i + 1
+  }
+
+  return sum
+}
+
+// 다음 달 예산 예측
+fn predict_next_month(monthly_totals, by_category) {
+  let predicted = weighted_moving_average(monthly_totals)
+
+  // 신뢰 구간 계산
+  let std = calc_std(monthly_totals)
+  let lower = predicted - (1.5 * std)
+  let upper = predicted + (1.5 * std)
+
+  if (lower < 0) { lower = 0 }
+
+  let result = {
+    predicted_total: predicted,
+    confidence_interval: {
+      lower: lower,
+      upper: upper
+    },
+    method: "weighted_moving_average"
+  }
+
+  // 카테고리별 예측
+  if (by_category != null) {
+    let category_predictions = {}
+    for cat in by_category.keys() {
+      let cat_totals = by_category[cat]
+      category_predictions[cat] = weighted_moving_average(cat_totals)
+    }
+    result.by_category = category_predictions
+  }
+
+  return result
+}
+
+// 저축 예측
+fn predict_savings(monthly_income, predicted_expense, months) {
+  let monthly_savings = monthly_income - predicted_expense
+
+  if (monthly_savings < 0) {
+    monthly_savings = 0
+  }
+
+  // 단리 계산
+  let total_simple = monthly_savings * months
+
+  // 복리 계산 (연 3% 적금)
+  let monthly_rate = 0.03 / 12
+  let total_compound = monthly_savings * (pow((1 + monthly_rate), months) - 1) / monthly_rate
+
+  return {
+    monthly_savings: monthly_savings,
+    total_simple_interest: total_simple,
+    total_compound_interest: total_compound,
+    period_months: months
+  }
+}
+
+// 목표 금액 달성 기간
+fn months_to_target(monthly_income, predicted_expense, target_amount) {
+  let monthly_savings = monthly_income - predicted_expense
+
+  if (monthly_savings <= 0) {
+    return -1
+  }
+
+  // 간단한 계산: target / monthly_savings
+  let months_simple = target_amount / monthly_savings
+
+  return round(months_simple)
+}

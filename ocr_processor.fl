@@ -1,0 +1,78 @@
+// 영수증 OCR 처리
+import { base64Encode } from "./stdlib/encoding"
+import { file } from "./stdlib/io"
+import { call_claude_vision, extract_json } from "./claude_client"
+import { json } from "./stdlib/json"
+import { string } from "./stdlib/string"
+
+// 이미지 파일을 base64로 인코딩
+fn image_to_base64(image_path) {
+  let raw_bytes = file.read_binary(image_path)
+  let b64 = base64Encode(raw_bytes)
+
+  // 파일 확장자에 따라 MIME 타입 결정
+  let parts = string.split(image_path, ".")
+  let ext = parts[parts.length - 1]
+  let media_type = "image/jpeg"
+
+  if (ext == "png") {
+    media_type = "image/png"
+  }
+  else if (ext == "webp") {
+    media_type = "image/webp"
+  }
+
+  return { base64: b64, media_type: media_type }
+}
+
+// 영수증에서 정보 추출
+fn extract_receipt(image_path) {
+  println("📸 영수증 OCR 처리 중: " + image_path)
+
+  let img_data = image_to_base64(image_path)
+
+  let prompt = "이 영수증에서 다음 정보를 JSON 형식으로 정확히 추출하세요:
+
+{
+  \"store_name\": \"상점명\",
+  \"date\": \"YYYY-MM-DD 형식의 구매날짜\",
+  \"total_amount\": 총구매액숫자,
+  \"items\": [
+    {\"name\": \"상품명\", \"price\": 가격숫자},
+    ...
+  ],
+  \"payment_method\": \"카드|현금|계좌이체 등\"
+}
+
+필드가 없으면 null을 입력하세요. 금액은 숫자만 입력하세요."
+
+  let response_text = call_claude_vision(prompt, img_data.base64, img_data.media_type)
+
+  if (response_text == null) {
+    println("❌ OCR 처리 실패")
+    return null
+  }
+
+  try {
+    let result = extract_json(response_text)
+    println("✅ OCR 처리 완료")
+    return result
+  } catch error {
+    println("❌ JSON 파싱 오류: " + error)
+    return null
+  }
+}
+
+// 영수증 배치 처리
+fn extract_receipts(image_paths) {
+  let results = []
+
+  for path in image_paths {
+    let result = extract_receipt(path)
+    if (result != null) {
+      results.push(result)
+    }
+  }
+
+  return results
+}

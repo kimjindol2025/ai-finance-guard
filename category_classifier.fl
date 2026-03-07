@@ -1,0 +1,85 @@
+// 카테고리 분류 (규칙 + Claude 폴백)
+import { call_claude, extract_json } from "./claude_client"
+import { json } from "./stdlib/json"
+import { string } from "./stdlib/string"
+
+let CATEGORY_RULES = {
+  "스타벅스": "카페", "할리스": "카페", "투썸플레이스": "카페", "이디야": "카페",
+  "ediya": "카페", "메가커피": "카페", "작은손": "카페",
+  "이마트": "식료품", "홈플러스": "식료품", "롯데마트": "식료품", "coupang": "식료품",
+  "gs25": "편의점", "cu": "편의점", "이천일": "편의점", "세븐일레븐": "편의점",
+  "netflix": "구독/OTT", "왓챠": "구독/OTT", "webtoon": "구독/OTT", "spotify": "구독/OTT",
+  "애플뮤직": "구독/OTT", "유튜브": "구독/OTT",
+  "uber": "외식", "배달의민족": "외식", "쿠팡이츠": "외식",
+  "맥도날드": "외식", "버거킹": "외식", "kfc": "외식", "삼겹살": "외식",
+  "기차": "교통", "버스": "교통", "택시": "교통", "우버": "교통",
+  "sk에너지": "통신", "kt": "통신", "lg": "통신"
+}
+
+let CATEGORIES = [
+  "식료품", "외식", "카페", "교통", "통신",
+  "구독/OTT", "의류", "의료", "교육", "여가",
+  "주거", "금융", "기타"
+]
+
+// 규칙 기반 분류
+fn classify_by_rule(store_name) {
+  let lower = string.lower_case(store_name)
+
+  for rule_store in CATEGORY_RULES.keys() {
+    if (string.contains(lower, rule_store)) {
+      return CATEGORY_RULES[rule_store]
+    }
+  }
+
+  return null
+}
+
+// Claude 폴백 분류
+fn classify_by_claude(store_name, amount) {
+  let prompt = "상점명: " + store_name + "\n금액: " + amount + "원\n\n다음 중 하나로 분류하세요:\n"
+
+  for cat in CATEGORIES {
+    prompt = prompt + "- " + cat + "\n"
+  }
+
+  prompt = prompt + "\nJSON으로 응답: {\"category\": \"선택된카테고리\"}"
+
+  let response = call_claude(prompt)
+  if (response == null) { return "기타" }
+
+  try {
+    let result = extract_json(response)
+    return result.category
+  } catch error {
+    return "기타"
+  }
+}
+
+// 메인 분류 함수 (2단계)
+fn classify(store_name, amount) {
+  // 1단계: 규칙 기반 (빠르고 비용 없음)
+  let rule_result = classify_by_rule(store_name)
+  if (rule_result != null) {
+    return rule_result
+  }
+
+  // 2단계: Claude 폴백
+  println("⚠️  규칙 미매핑 항목. Claude로 분류: " + store_name)
+  return classify_by_claude(store_name, amount)
+}
+
+// 배치 분류
+fn classify_batch(expenses) {
+  let results = []
+
+  for exp in expenses {
+    let cat = classify(exp.store_name, exp.amount)
+    results.push({
+      expense_id: exp.id,
+      category: cat
+    })
+  }
+
+  return results
+}

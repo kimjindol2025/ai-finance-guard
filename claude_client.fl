@@ -1,0 +1,99 @@
+// Claude API 직접 호출 래퍼
+import fetch from "./stdlib/fetch"
+import { json } from "./stdlib/json"
+import { readEnv } from "./stdlib/env"
+import { string } from "./stdlib/string"
+
+// 일반 텍스트 프롬프트 호출
+fn call_claude(prompt, model) {
+  let api_key = readEnv("ANTHROPIC_API_KEY")
+  if (api_key == null || api_key == "") {
+    println("❌ 오류: ANTHROPIC_API_KEY 환경변수가 설정되지 않았습니다.")
+    return null
+  }
+
+  let body = {
+    model: model || "claude-3-5-sonnet-20241022",
+    max_tokens: 2000,
+    messages: [{
+      role: "user",
+      content: prompt
+    }]
+  }
+
+  let response = fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "x-api-key": api_key,
+      "anthropic-version": "2023-06-01",
+      "content-type": "application/json"
+    },
+    body: json.stringify(body)
+  })
+
+  if (response.status != 200) {
+    println("❌ API 오류: " + response.status)
+    println(response.body)
+    return null
+  }
+
+  let data = json.parse(response.body)
+  return data.content[0].text
+}
+
+// Vision API 호출 (이미지 포함)
+fn call_claude_vision(prompt, image_b64, media_type) {
+  let api_key = readEnv("ANTHROPIC_API_KEY")
+  if (api_key == null || api_key == "") {
+    println("❌ 오류: ANTHROPIC_API_KEY 환경변수가 설정되지 않았습니다.")
+    return null
+  }
+
+  let body = {
+    model: "claude-3-5-sonnet-20241022",
+    max_tokens: 2000,
+    messages: [{
+      role: "user",
+      content: [
+        {
+          type: "image",
+          source: {
+            type: "base64",
+            media_type: media_type,
+            data: image_b64
+          }
+        },
+        {
+          type: "text",
+          text: prompt
+        }
+      ]
+    }]
+  }
+
+  let response = fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "x-api-key": api_key,
+      "anthropic-version": "2023-06-01",
+      "content-type": "application/json"
+    },
+    body: json.stringify(body)
+  })
+
+  if (response.status != 200) {
+    println("❌ API 오류: " + response.status)
+    println(response.body)
+    return null
+  }
+
+  let data = json.parse(response.body)
+  return data.content[0].text
+}
+
+// JSON 응답 추출 (마크다운 블록 제거)
+fn extract_json(response_text) {
+  let cleaned = string.replace(response_text, "```json", "")
+  cleaned = string.replace(cleaned, "```", "")
+  return json.parse(string.trim(cleaned))
+}

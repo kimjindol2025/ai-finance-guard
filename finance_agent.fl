@@ -1,0 +1,134 @@
+// 메인 에이전트 - 모든 모듈 통합
+import "./claude_client" as cc
+import "./expense_tracker" as et
+import "./subscription_manager" as sm
+import "./ocr_processor" as ocr
+import "./category_classifier" as cat
+import "./budget_predictor" as bp
+import "./recommender" as rec
+import "./formatters" as fmt
+import { readEnv } from "./stdlib/env"
+
+let agent_db = null
+
+// 에이전트 초기화
+fn init() {
+  et.init_db()
+  println("✅ AI Finance Guard 초기화 완료")
+}
+
+// OCR 영수증 스캔
+fn scan_receipt(image_path) {
+  let receipt = ocr.extract_receipt(image_path)
+  if (receipt == null) { return null }
+
+  // 카테고리 자동 분류
+  let category = cat.classify(receipt.store_name, receipt.total_amount)
+  receipt.category = category
+
+  // DB에 저장
+  et.add_expense(
+    receipt.date,
+    receipt.store_name,
+    receipt.total_amount,
+    category,
+    "OCR 자동 인식",
+    receipt.payment_method,
+    "ocr"
+  )
+
+  println("✅ 영수증 저장 완료: " + receipt.store_name + " " + receipt.total_amount + "원")
+  return receipt
+}
+
+// 지출 수동 추가
+fn add_expense(amount, store_name, date, category, note) {
+  let auto_category = category
+  if (category == null || category == "") {
+    auto_category = cat.classify(store_name, amount)
+  }
+
+  et.add_expense(date, store_name, amount, auto_category, note, "카드", "manual")
+  println("✅ 지출 저장: " + store_name + " " + amount + "원")
+  return true
+}
+
+// 월별 리포트
+fn get_monthly_report(year, month) {
+  let expenses = et.get_monthly_expenses(year, month)
+  let total = 0
+
+  for exp in expenses {
+    total = total + exp.amount
+  }
+
+  let month_str = year + "-" + month
+
+  fmt.print_monthly_report(month_str, expenses, total)
+  return { expenses: expenses, total: total }
+}
+
+// 예산 예측
+fn predict_budget() {
+  // 간단한 예측 (실제로는 최근 3개월 데이터 필요)
+  let recent_months = [100000, 120000, 110000]
+  let prediction = bp.predict_next_month(recent_months, null)
+
+  fmt.print_prediction(prediction)
+  return prediction
+}
+
+// 구독 자동 감지
+fn detect_subscriptions() {
+  let expenses = et.get_all_expenses()
+  let candidates = sm.detect_recurring(expenses)
+
+  if (candidates.length == 0) {
+    println("구독 후보가 없습니다")
+    return []
+  }
+
+  println("📌 구독 서비스 후보 (" + candidates.length + "개):")
+  for candidate in candidates {
+    println("  - " + candidate.store_name + ": " + candidate.avg_amount + "원/월")
+    println("    신뢰도: " + candidate.confidence)
+  }
+
+  return candidates
+}
+
+// 저축 예측
+fn forecast_savings(income, months) {
+  let prediction = predict_budget()
+  let forecast = bp.predict_savings(income, prediction.predicted_total, months)
+
+  fmt.print_savings_forecast(forecast, months)
+  return forecast
+}
+
+// 대안 서비스 추천
+fn recommend_for_service(service_name, price) {
+  let alternatives = rec.recommend_alternatives(service_name, price)
+  if (alternatives == null) {
+    println("❌ 추천을 찾을 수 없습니다")
+    return null
+  }
+
+  println("\n💡 " + service_name + "의 대안 서비스:")
+  if (alternatives.alternatives != null) {
+    for alt in alternatives.alternatives {
+      println("  - " + alt.name + ": " + alt.price + "원/월")
+    }
+  }
+
+  if (alternatives.recommendation != null) {
+    println("\n🏆 추천: " + alternatives.recommendation)
+  }
+
+  return alternatives
+}
+
+// 종료
+fn close() {
+  println("✅ 프로그램 종료")
+}

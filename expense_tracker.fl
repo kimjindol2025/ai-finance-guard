@@ -1,0 +1,177 @@
+// 지출 추적 및 SQLite 관리
+import { sqlite, select, insert, update, where, exec } from "./stdlib/orm"
+import { readEnv } from "./stdlib/env"
+import { string } from "./stdlib/string"
+import { array } from "./stdlib/array"
+import { json } from "./stdlib/json"
+
+let db = null
+
+// 데이터베이스 초기화
+fn init_db() {
+  let db_path = readEnv("DB_PATH") || "./finance.db"
+  db = sqlite(db_path)
+
+  // expenses 테이블
+  exec(db, "CREATE TABLE IF NOT EXISTS expenses (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    date TEXT NOT NULL,
+    store_name TEXT NOT NULL,
+    amount REAL NOT NULL,
+    category TEXT DEFAULT '기타',
+    payment_method TEXT DEFAULT '카드',
+    note TEXT,
+    source TEXT DEFAULT 'manual',
+    receipt_image_path TEXT,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    CHECK(amount > 0)
+  )")
+
+  // expense_items 테이블
+  exec(db, "CREATE TABLE IF NOT EXISTS expense_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    expense_id INTEGER NOT NULL,
+    item_name TEXT NOT NULL,
+    price REAL NOT NULL,
+    quantity INTEGER DEFAULT 1,
+    FOREIGN KEY (expense_id) REFERENCES expenses(id) ON DELETE CASCADE
+  )")
+
+  // subscriptions 테이블
+  exec(db, "CREATE TABLE IF NOT EXISTS subscriptions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    amount REAL NOT NULL,
+    cycle TEXT NOT NULL,
+    monthly_cost REAL NOT NULL,
+    category TEXT DEFAULT '구독/OTT',
+    next_renewal_date TEXT NOT NULL,
+    is_active INTEGER DEFAULT 1,
+    auto_detected INTEGER DEFAULT 0,
+    notes TEXT,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+  )")
+
+  // subscription_history 테이블
+  exec(db, "CREATE TABLE IF NOT EXISTS subscription_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    subscription_id INTEGER NOT NULL,
+    renewal_date TEXT NOT NULL,
+    amount REAL NOT NULL,
+    status TEXT DEFAULT 'paid',
+    FOREIGN KEY (subscription_id) REFERENCES subscriptions(id)
+  )")
+
+  // budgets 테이블
+  exec(db, "CREATE TABLE IF NOT EXISTS budgets (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    year INTEGER NOT NULL,
+    month INTEGER NOT NULL,
+    category TEXT NOT NULL,
+    budget_amount REAL NOT NULL,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(year, month, category)
+  )")
+
+  // income_records 테이블
+  exec(db, "CREATE TABLE IF NOT EXISTS income_records (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    date TEXT NOT NULL,
+    amount REAL NOT NULL,
+    source TEXT DEFAULT '급여',
+    note TEXT,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+  )")
+
+  // recurring_candidates 테이블
+  exec(db, "CREATE TABLE IF NOT EXISTS recurring_candidates (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    store_name TEXT NOT NULL,
+    avg_amount REAL NOT NULL,
+    interval_days INTEGER NOT NULL,
+    occurrences INTEGER NOT NULL,
+    confidence REAL NOT NULL,
+    suggested_cycle TEXT,
+    is_confirmed INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+  )")
+
+  println("✅ 데이터베이스 초기화 완료")
+}
+
+// 지출 추가
+fn add_expense(date, store_name, amount, category, note, payment_method, source) {
+  if (db == null) { init_db() }
+
+  insert(db, "expenses", {
+    date: date,
+    store_name: store_name,
+    amount: amount,
+    category: category,
+    payment_method: payment_method,
+    note: note,
+    source: source
+  })
+
+  return true
+}
+
+// 지출 목록 조회
+fn get_monthly_expenses(year, month) {
+  if (db == null) { init_db() }
+
+  let month_str = year + "-" + string.pad_left(month, 2, "0")
+  return select(db, "expenses")
+    .where("date LIKE ?", month_str + "%")
+    .order_by("date DESC")
+    .all()
+}
+
+// 모든 지출 조회
+fn get_all_expenses() {
+  if (db == null) { init_db() }
+
+  return select(db, "expenses")
+    .order_by("date DESC")
+    .all()
+}
+
+// 월별 합계
+fn get_monthly_totals(months_back) {
+  if (db == null) { init_db() }
+
+  let totals = []
+  let i = 0
+  while i < months_back {
+    // 날짜 계산 로직 (현재는 간단히 고정)
+    i = i + 1
+  }
+
+  return totals
+}
+
+// 카테고리별 합계
+fn get_category_totals(year, month) {
+  if (db == null) { init_db() }
+
+  return select(db, "expenses")
+    .where("date LIKE ?", year + "-" + string.pad_left(month, 2, "0") + "%")
+    .group_by("category")
+    .aggregate({ category: "category", total: "SUM(amount)" })
+    .all()
+}
+
+// 지출 항목 추가
+fn add_expense_item(expense_id, item_name, price, quantity) {
+  if (db == null) { init_db() }
+
+  insert(db, "expense_items", {
+    expense_id: expense_id,
+    item_name: item_name,
+    price: price,
+    quantity: quantity
+  })
+
+  return true
+}

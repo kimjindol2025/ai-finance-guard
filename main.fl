@@ -1,0 +1,180 @@
+// AI Finance Guard - CLI 진입점
+import "./finance_agent" as agent
+import { string } from "./stdlib/string"
+
+// CLI 인자 파싱 헬퍼
+fn get_flag(flag_name) {
+  let i = 0
+  while i < args.length {
+    if (args[i] == flag_name && i + 1 < args.length) {
+      return args[i + 1]
+    }
+    i = i + 1
+  }
+  return null
+}
+
+fn print_help() {
+  println(`
+╔════════════════════════════════════════════════════════════╗
+║       🏦 AI Finance Guard - 지능형 자산 관리 에이전트      ║
+║                  FreeLang 기반 금융 앱                     ║
+╚════════════════════════════════════════════════════════════╝
+
+사용법: freelang main.fl <명령어> [옵션]
+
+🎫 주요 명령어:
+
+📸 OCR 영수증 스캔
+  freelang main.fl scan --image receipt.jpg
+
+💸 지출 관리
+  freelang main.fl add --amount 15000 --store "스타벅스" --date 2026-03-07
+  freelang main.fl list [--month 2026-02]
+  freelang main.fl report [--month 2026-02]
+
+📊 분석/예측
+  freelang main.fl analyze [--months 6]
+  freelang main.fl predict [--income 3000000]
+
+🎫 구독 관리
+  freelang main.fl sub add --name "Netflix" --amount 17000 --cycle monthly --next 2026-04-01
+  freelang main.fl sub list
+  freelang main.fl sub upcoming [--days 7]
+  freelang main.fl sub cancel --id 3
+  freelang main.fl sub detect
+
+💡 대안 추천
+  freelang main.fl recommend --name "Netflix"
+
+💰 예산 & 저축
+  freelang main.fl budget set --category 외식 --amount 200000
+  freelang main.fl budget check
+  freelang main.fl savings [--target 10000000]
+  freelang main.fl income add --amount 3000000 --source 급여
+
+❓ 도움말
+  freelang main.fl help
+`)
+}
+
+fn main() {
+  if (args.length == 0) {
+    print_help()
+    return
+  }
+
+  let cmd = args[0]
+
+  // 초기화
+  agent.init()
+
+  // 명령어 라우팅
+  if (cmd == "scan") {
+    let image = get_flag("--image")
+    if (image == null) {
+      println("❌ 오류: --image 옵션이 필요합니다")
+      return
+    }
+    agent.scan_receipt(image)
+  }
+
+  else if (cmd == "add") {
+    let amount = get_flag("--amount")
+    let store = get_flag("--store")
+    let date = get_flag("--date") || "2026-03-07"
+    let category = get_flag("--category")
+
+    if (amount == null || store == null) {
+      println("❌ 오류: --amount와 --store 옵션이 필요합니다")
+      return
+    }
+
+    agent.add_expense(
+      number(amount),
+      store,
+      date,
+      category,
+      "수동 입력"
+    )
+  }
+
+  else if (cmd == "list") {
+    let month = get_flag("--month") || "2026-03"
+    let parts = string.split(month, "-")
+    agent.get_monthly_report(parts[0], parts[1])
+  }
+
+  else if (cmd == "report") {
+    let month = get_flag("--month") || "2026-03"
+    let parts = string.split(month, "-")
+    agent.get_monthly_report(parts[0], parts[1])
+  }
+
+  else if (cmd == "predict") {
+    let income = get_flag("--income")
+    if (income != null) {
+      agent.forecast_savings(number(income), 6)
+    } else {
+      agent.predict_budget()
+    }
+  }
+
+  else if (cmd == "analyze") {
+    println("📊 지출 패턴 분석 (구현 중)")
+  }
+
+  else if (cmd == "sub") {
+    let sub_cmd = args[1]
+
+    if (sub_cmd == "detect") {
+      agent.detect_subscriptions()
+    }
+    else if (sub_cmd == "list") {
+      println("🎫 구독 목록 (구현 중)")
+    }
+    else if (sub_cmd == "add") {
+      println("✅ 구독 추가 (구현 중)")
+    }
+    else if (sub_cmd == "cancel") {
+      let id = get_flag("--id")
+      println("✅ 구독 해지: ID " + id)
+    }
+    else {
+      println("❌ 알 수 없는 sub 명령어: " + sub_cmd)
+    }
+  }
+
+  else if (cmd == "recommend") {
+    let name = get_flag("--name")
+    if (name == null) {
+      println("❌ 오류: --name 옵션이 필요합니다")
+      return
+    }
+    agent.recommend_for_service(name, 17000)
+  }
+
+  else if (cmd == "budget") {
+    println("💰 예산 설정 (구현 중)")
+  }
+
+  else if (cmd == "savings") {
+    let target = get_flag("--target") || "10000000"
+    println("💰 저축 목표: " + target + "원 (구현 중)")
+  }
+
+  else if (cmd == "income") {
+    println("💵 수입 기록 (구현 중)")
+  }
+
+  else if (cmd == "help" || cmd == "-h" || cmd == "--help") {
+    print_help()
+  }
+
+  else {
+    println("❌ 알 수 없는 명령어: " + cmd)
+    print_help()
+  }
+
+  agent.close()
+}

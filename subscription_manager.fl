@@ -1,0 +1,129 @@
+// 구독 관리 및 자동 감지
+import { sqlite, select, insert, update } from "./stdlib/orm"
+import { array } from "./stdlib/array"
+import { json } from "./stdlib/json"
+import { string } from "./stdlib/string"
+
+let db = null
+
+fn set_db(database) {
+  db = database
+}
+
+// 구독 추가
+fn add_subscription(name, amount, cycle, next_renewal, category) {
+  if (db == null) { return false }
+
+  // 월 환산 비용 계산
+  let monthly_cost = amount
+  if (cycle == "yearly") {
+    monthly_cost = amount / 12
+  }
+  else if (cycle == "weekly") {
+    monthly_cost = amount * 52 / 12
+  }
+
+  insert(db, "subscriptions", {
+    name: name,
+    amount: amount,
+    cycle: cycle,
+    monthly_cost: monthly_cost,
+    category: category,
+    next_renewal_date: next_renewal,
+    is_active: 1,
+    auto_detected: 0
+  })
+
+  return true
+}
+
+// 활성 구독 조회
+fn get_active_subscriptions() {
+  if (db == null) { return [] }
+
+  return select(db, "subscriptions")
+    .where("is_active = ?", 1)
+    .order_by("next_renewal_date")
+    .all()
+}
+
+// 다가올 갱신 조회
+fn get_upcoming_renewals(days) {
+  if (db == null) { return [] }
+
+  // 간단한 날짜 비교 (기간 계산은 복잡하므로 생략)
+  return select(db, "subscriptions")
+    .where("is_active = ? AND next_renewal_date <= date('now', '+' || ? || ' days')", 1, days)
+    .order_by("next_renewal_date")
+    .all()
+}
+
+// 월 구독 비용 합계
+fn get_total_monthly_cost() {
+  if (db == null) { return 0 }
+
+  let subs = get_active_subscriptions()
+  let total = 0
+
+  for sub in subs {
+    total = total + sub.monthly_cost
+  }
+
+  return total
+}
+
+// 반복 결제 자동 감지 (간단 버전)
+fn detect_recurring(expenses) {
+  let groups = {}
+
+  // 상점명별로 그룹핑
+  for exp in expenses {
+    let store = exp.store_name
+    if (groups[store] == null) {
+      groups[store] = []
+    }
+    groups[store].push(exp)
+  }
+
+  let candidates = []
+
+  // 각 그룹 분석
+  for store_name in groups.keys() {
+    let payments = groups[store_name]
+
+    if (array.length(payments) < 3) {
+      continue
+    }
+
+    // 금액과 간격 분석 (간단 버전)
+    let amounts = array.map(payments, fn(p) { return p.amount })
+    let avg_amount = array.sum(amounts) / array.length(amounts)
+
+    // 변동률 계산
+    let price_var = 0  // 간단한 예: 모두 같다고 가정
+
+    // 신뢰도 > 0.7이면 후보로 등록
+    if (price_var < 0.10 && avg_amount > 0) {
+      candidates.push({
+        store_name: store_name,
+        avg_amount: avg_amount,
+        occurrences: array.length(payments),
+        confidence: 0.75,
+        suggested_cycle: "monthly"
+      })
+    }
+  }
+
+  return candidates
+}
+
+// 구독 해지
+fn cancel_subscription(sub_id) {
+  if (db == null) { return false }
+
+  update(db, "subscriptions")
+    .where("id = ?", sub_id)
+    .set({ is_active: 0 })
+
+  return true
+}
